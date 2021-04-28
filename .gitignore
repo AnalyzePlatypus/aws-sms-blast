@@ -1,5 +1,5 @@
 node_modules
 .DS_Store
 .env.json
-data/phones.csv
+data/recipients.csv
 data/template.txt

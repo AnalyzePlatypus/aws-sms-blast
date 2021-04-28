@@ -1,27 +1,35 @@
+const fs = require('fs');
+
 const chalk = require('chalk');
 const yesno = require('yesno'); 
 
 const formatPhone = require('phone');
-const populateTemplate = require('string-template');
+
+
 
 
 const { readTextFile, readJsonFile, readCsvFile, loadEnvVars, validateEnvVars, parseBoolean } = require("./util.js");
+const { log } = require('console');
 
 const REQUIRED_ENV_VARS = [
   "DATA_DIRECTORY",
-  "PRICE_PER_MESSAGE_USD"
+  "PRICE_PER_MESSAGE_USD",
+  "SNS_USAGE_REPORT_S3_BUCKET"
 ]
 
 const ASCII_REGEX = /^[\x00-\x7F]*$/g
 const SMS_ASCII_LIMIT = 140;
-const SNS_MESSAGE_SEND_AVERAGE_MS = 250;
+const SNS_MESSAGE_SEND_AVERAGE_MS = 265;
 
 loadEnvVars("../.env.json");
 validateEnvVars(REQUIRED_ENV_VARS);
 
+const { sendMessages } = require("./sendMessages.js");
+
 const DATA_DIRECTORY = "../" + process.env.DATA_DIRECTORY;
-const MESSAGE_RECIPIENT_FILE_PATH = DATA_DIRECTORY + "phones.csv";
+const MESSAGE_RECIPIENT_FILE_PATH = DATA_DIRECTORY + "recipients.csv";
 const MESSAGE_TEMPLATE_PATH = DATA_DIRECTORY + "template.txt";
+const PROGRESS_FILE = DATA_DIRECTORY + "progress.txt";
 
 // Runtime
 async function main() {
@@ -31,18 +39,25 @@ async function main() {
     const textTemplate = readTextFile(MESSAGE_TEMPLATE_PATH);
     let recipients = readMessageRecipientFile();
   
+    checkMessageLength(textTemplate);
+
     recipients  = validatePhoneNumbers(recipients)
-    checkMessageLength(textTemplate)
+    
     console.log(`✅ All validations passed`);
+    console.log(`🌍 Total recipients: ${recipients.length}`);
+
+    //await checkForProgressFile(recipients);
 
     computeEstimatedPricePrompt(recipients);
 
-    const ok = await yesno({ question: 'Ready to send? [y/n]' });
+    const ok = await yesno({ question: `\n🚀 Ready to send to ${recipients.length} recipients? [y/n]` });
 
     if(!ok) {
       console.log("💥 Cancelled.");
       return;
     }
+
+    await sendMessages(textTemplate, recipients);
 
     console.log("🌙 That's all, folks!");
    
@@ -62,24 +77,53 @@ function readMessageRecipientFile() {
 function validatePhoneNumbers(recipients) {
   console.log(`ℹ️ Phone numbers without a international country code will be assumed to be North American (+1)\n`);
   console.log(`🔬 Validating ${recipients.length} recipients...`);
-  const results = recipients.map((r, i) => {
+  let results = []
+
+  let duplicates = {};
+
+  recipients.forEach((r, i) => {
     if(!r.phone) {
       console.error(`❗️ Validation failed!\nRow ${i} has missing phone number!`);
       console.error(r);
       throw new TypeError();
     }
-    const normalizedPhone = formatPhone(r.phone, '', false);
+    let normalizedPhone = formatPhone(r.phone, '', false);
     if(normalizedPhone.length == 0) {
       console.error(`❗️ Validation failed!\nRow ${i} has invalid phone number "${r.phone}"`);
       throw new TypeError();
     }
-    return {
-      ...r,
-      phone: normalizedPhone[0]
+
+    normalizedPhone = normalizedPhone[0];
+
+    if(results.find(result => result.phone == normalizedPhone)) { 
+      if(!duplicates[normalizedPhone]) duplicates[normalizedPhone] = { count: 0 }
+      duplicates[normalizedPhone].count += 1;
+      // duplicates[normalizedPhone].duplicateRecipients.push(r)
+      return;
     }
+
+    results.push({
+      ...r,
+      phone: normalizedPhone
+    })
   })
+
   console.log(`✅ All phone numbers normalized`);
-  console.log(`✅ Recipient validation passed`);
+  
+  const duplicateCount = Object.keys(duplicates).length
+
+  if(duplicateCount > 0) {
+    console.log(`❗️ ${duplicateCount} duplicate phone numbers found.`);
+    console.log(duplicates);
+
+    const totalNumbersRemoved = Object.values(duplicates).reduce((all, d) => all += d.count, 0);
+    console.log(`💂 ${totalNumbersRemoved} total duplicates were removed`);
+    console.log(`🌍 ${results.length} recipients remaining`);
+  } else {
+    console.log(`✅ No duplicates found`);
+  }
+
+  console.log(`✅ Recipient validation complete\n`);
   
   return results;
 }
@@ -109,8 +153,23 @@ async function computeEstimatedPricePrompt(recipients) {
   const estimatedSendTimeSeconds = estimatedSendTimeMS / 1000;
   console.log(`\n⏰ Estimated send time: ${estimatedSendTimeSeconds}s`);
   console.log(`💸 Estimated AWS price to send: $${totalPriceUSD}`);
+}
 
-  
+async function checkForProgressFile(recipients) {
+  console.log(`\n🌀 Checking for progress file...`);
+  if(fs.existsSync(PROGRESS_FILE)) {
+    const progress = readCsvFile(PROGRESS_FILE);
+    const unsentCount = recipients.length - progress.length;
+    console.log(`\n🎉 Progress file found`);
+    if(unsentCount == 0) {
+      throw `✅ All ${recipients.length} messages have already been sent.`;
+    }
+    console.log(`${progress.length} messages already sent.\n(Full list here: ${PROGRESS_FILE})`);
+    const ok = await yesno({ question: `Would you like to proceed? [y/n]` });
+    if(!ok) throw "Aborted";
+  } else {
+    console.log(`✅ No progress file found`);
+  }
 }
 
 
