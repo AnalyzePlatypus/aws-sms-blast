@@ -4,8 +4,12 @@ const AWS = require('aws-sdk');
 const ProgressBar = require('progress');
 const queue  = require('async/queue');
 const populateTemplate = require('string-template');
+const chunk = require('lodash.chunk');
 
-const { readTextFile, readJsonFile, readCsvFile, loadEnvVars, validateEnvVars, parseBoolean } = require("./util.js");
+const BATCH_SIZE = 19; // Limit is 20 messages/second
+const BATCH_WAIT_MS = 1001;
+
+const { readTextFile, readJsonFile, readCsvFile, loadEnvVars, validateEnvVars, parseBoolean, sleep, asyncForEach } = require("./util.js");
 
 const DATA_DIRECTORY = "../" + process.env.DATA_DIRECTORY;
 const PROGRESS_FILE = DATA_DIRECTORY + "progress.txt";
@@ -29,8 +33,8 @@ async function sendMessage({messageTemplate, recipient}) {
     Message: finalMessage,
     PhoneNumber: recipient.phone
   }
-  
-  await SNS.publish(params).promise();
+
+  SNS.publish(params).promise();
 }
 
 
@@ -59,11 +63,16 @@ async function sendMessages(messageTemplate, recipients) {
   });
 
 
-  q.push(messages,  function(err) {
-    sentMessageCount += 1;
-    bar.tick();
-  });
+  const messageBatches = chunk(messages, BATCH_SIZE);
 
+  await asyncForEach(messageBatches, async batch => {
+    q.push(batch,  function(err) {
+      sentMessageCount += 1;
+      bar.tick();
+    });
+    await sleep(BATCH_WAIT_MS);
+  })
+  
   await q.drain();
 
   const endTime = new Date();

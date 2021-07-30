@@ -19,7 +19,10 @@ const REQUIRED_ENV_VARS = [
 
 const ASCII_REGEX = /^[\x00-\x7F]*$/g
 const SMS_ASCII_LIMIT = 140;
-const SNS_MESSAGE_SEND_AVERAGE_MS = 265;
+
+const BATCH_SEND_TIME_MS = (1001)
+const BATCH_SIZE = 20;
+const SNS_MESSAGE_SEND_AVERAGE_MS = BATCH_SEND_TIME_MS / BATCH_SIZE;
 
 loadEnvVars("../.env.json");
 validateEnvVars(REQUIRED_ENV_VARS);

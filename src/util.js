@@ -24,7 +24,15 @@ function readCsvFile(path) {
   });
 }
 
+async function sleep(ms) {
+  return await new Promise(resolve => setTimeout(resolve, ms));
+}
 
+async function asyncForEach(array, callback) {
+  for (let index = 0; index < array.length; index++) {
+    await callback(array[index], index, array);
+  }
+}
 
 // Import env vars from .env.json
 
@@ -59,3 +67,5 @@ exports.validateEnvVars = validateEnvVars;
 exports.readCsvFile = readCsvFile;
 exports.readTextFile = readTextFile;
 exports.parseBoolean = parseBoolean;
+exports.sleep = sleep;
+exports.asyncForEach = asyncForEach;
