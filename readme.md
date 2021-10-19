@@ -1,6 +1,6 @@
 # AWS SMS Blast
 
-Send powerful SMS batch send from the command line, powered by [AWS SNS text messaging](https://docs.aws.amazon.com/sns/latest/dg/sms_publish-to-phone.html).
+Powerful SMS batch sending for the command line, powered by [AWS SNS text messaging](https://docs.aws.amazon.com/sns/latest/dg/sms_publish-to-phone.html).
 
 
 * 🤗 Forgiving phone number parsing with landline rejection.
@@ -8,7 +8,9 @@ Send powerful SMS batch send from the command line, powered by [AWS SNS text mes
 * 🤓 Variable interpolation ("Hey {name}, your order will ship on...")
 * ⏰ Smart progress bar with ETA
 * 🤑 AWS cost estimation _before_ sending, with interactive prompt.
-* 🚀 Fully multithreaded message send
+* 🚀 Fully multithreaded message dispatch
+
+> ❗️ *Please note:* Access to AWS SNS text messaging is tightly regulated by Amazon to prevent abuse. To send any useful amount of messages (> 155/month), you'll need to [apply for access](https://docs.aws.amazon.com/sns/latest/dg/channels-sms-awssupport-spend-threshold.html))
 
 ## Installation
 
@@ -35,7 +37,7 @@ Here's what output looks like:
 📂 Found 1 recipient
 
 🔬 Checking message...
-ℹ️ "Hey {name}. Your Bnos Devorah box order will be delivered on Friday, between 6 AM - 2PM."
+ℹ️ "Hey {name}. Your order will be delivered on Friday, between 6 AM - 2PM."
 ✅ Message is ASCII only
 ✅ Message byte length is 88 (Limit is 140)
 
@@ -140,7 +142,7 @@ We solve this by spawning worker threads that send the messages in parallel. A w
 
 #### Applying for SNS bulk limits
 
-All AWS accounts are limited by up to $1 in SMS messages per month, or 155 messages.
+❗️ All AWS accounts are limited by up to $1 in SMS messages per month, or 155 messages.
 
 To raise your limit, you'll need to request approval using a AWS Support Request. See the [official docs](https://docs.aws.amazon.com/sns/latest/dg/channels-sms-awssupport-spend-threshold.html)
 
